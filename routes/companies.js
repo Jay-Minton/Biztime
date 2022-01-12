@@ -2,6 +2,7 @@ const express = require("express");
 const router = new express.Router();
 const db = require ("../db");
 const ExpressError = require("../expressError");
+const slugify = require("slugify");
 
 router.get("/", async function(req, res, next) {
     try {
@@ -21,11 +22,19 @@ router.get("/:id", async function(req, res, next) {
             throw new ExpressError("Company code not found", 404);
         }
         const invoResults = await db.query(`SELECT id FROM invoices WHERE comp_code = $1`, [req.params.id]);
+     
+        const indyResults = await db.query(`SELECT C.comp_code, I.industry 
+                                            FROM companies_industries AS C JOIN industries AS I
+                                            ON C.indy_code = I.code
+                                            WHERE C.comp_code = $1`, [req.params.id]);
+
 
         const company = compResults.rows[0];
         const invoices = invoResults.rows;
+        const indys = indyResults.rows;
 
         company.invoices = invoices.map(inv => inv.id);
+        company.industires = indys.map(ind => ind.industry);
 
         return res.json({"company": company});
 
@@ -36,7 +45,8 @@ router.get("/:id", async function(req, res, next) {
 
 router.post("/", async function(req, res, next) {
     try {
-        const { code, name, description} = req.body;
+        const { name, description} = req.body;
+        const code = slugify(name);
 
         const results = await db.query(`INSERT INTO companies(code, name, description) 
                                         VALUES ($1, $2, $3) 

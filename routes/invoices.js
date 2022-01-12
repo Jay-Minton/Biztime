@@ -59,14 +59,27 @@ router.post("/", async function(req, res, next) {
 
 router.put("/:id", async function(req, res, next) {
     try {
-        const { amt } = req.body;
+        const { amt, paid } = req.body;
+        let paydate = null;
 
-        const results = await db.query(`UPDATE invoices SET amt = $1
-                                        WHERE id = $2 
-                                        RETURNING id, comp_code, amt, paid, add_date, paid_date`, [amt, req.params.id]);
-        if (!results.rows[0]) {
+        const currResults = await db.query(`SELECT paid FROM invoices WHERE id = $1`, [req.params.id]);
+        if (!currResults.rows[0]) {
             throw new ExpressError("Invoice ID not found", 404);
         }
+        const currPaidDate = currResults.rows[0].paid_date;
+
+        if(!currPaidDate && paid) {
+            paydate = new Date();
+        } else if (!paid) {
+            paydate = null;
+        } else {
+            paydate = currPaidDate;
+        }
+
+        const results = await db.query(`UPDATE invoices SET amt = $1, paid = $2, paid_date = $3
+                                        WHERE id = $4
+                                        RETURNING id, comp_code, amt, paid, add_date, paid_date`, [amt, paid, paydate, req.params.id]);
+        
         return res.json({invoice: results.rows}); 
     } catch(err) {
         return next(err);
